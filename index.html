@@ -2,78 +2,92 @@
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>鄱阳湖水体动态监测系统</title>
-  <style>
-    body { 
-      margin: 0; 
-      padding: 0; 
-      font-family: 'Arial', sans-serif;
-    }
-    #map-container {
-      position: relative;
-      height: 100vh;
-      width: 100%;
-    }
-    #status-panel {
-      position: absolute;
-      top: 10px;
-      left: 50%;
-      transform: translateX(-50%);
-      background: rgba(255, 255, 255, 0.9);
-      padding: 10px 20px;
-      border-radius: 5px;
-      box-shadow: 0 2px 10px rgba(0,0,0,0.2);
-      z-index: 1000;
-      max-width: 80%;
-      text-align: center;
-    }
-    #control-panel {
-      position: absolute;
-      top: 60px;
-      left: 10px;
-      background: rgba(255, 255, 255, 0.8);
-      padding: 10px;
-      border-radius: 5px;
-      z-index: 1000;
-      width: 300px;
-    }
-    button {
-      padding: 8px 12px;
-      margin: 5px 0;
-      width: 100%;
-      cursor: pointer;
-    }
-    #chart-container {
-      position: absolute;
-      bottom: 20px;
-      left: 10px;
-      right: 10px;
-      height: 200px;
-      background: white;
-      z-index: 1000;
-      border-radius: 5px;
-      padding: 10px;
-      box-shadow: 0 2px 10px rgba(0,0,0,0.2);
-    }
-  </style>
+  <title>鄱阳湖水体分析系统</title>
+  
+  <!-- 引入Google Identity Services库 -->
+  <script src="https://accounts.google.com/gsi/client" async defer></script>
+  
+  <!-- 其他样式和库保持不变 -->
 </head>
 <body>
-  <div id="map-container">
-    <div id="status-panel">正在初始化系统...</div>
-    <div id="control-panel">
-      <h3>鄱阳湖水体分析</h3>
-      <button id="analyze-btn">运行季节性分析</button>
-      <div id="date-range">时间范围: 2020-2021</div>
-    </div>
-    <div id="chart-container"></div>
-    <div id="map"></div>
-  </div>
+  <!-- 您的页面内容保持不变 -->
 
-  <!-- 加载必要的库 -->
-  <script src="https://code.earthengine.google.com/ee_api_install.js"></script>
-  <script src="https://maps.googleapis.com/maps/api/js?key=YOUR_GOOGLE_MAPS_API_KEY"></script>
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-  <script src="app.js"></script>
+  <script>
+    // 配置GEE认证
+    const GEE_CLIENT_ID = '43779976395-dm7nk4h1k9vdqpkpe7mmn4nr3k2easdq.apps.googleusercontent.com';
+    
+    // 初始化GEE认证
+    async function initializeGEEAuth() {
+      return new Promise((resolve, reject) => {
+        if (typeof google === 'undefined' || !google.accounts) {
+          reject(new Error('Google Identity Services库未加载'));
+          return;
+        }
+        
+        // 配置Token Client
+        const tokenClient = google.accounts.oauth2.initTokenClient({
+          client_id: GEE_CLIENT_ID,
+          scope: 'https://www.googleapis.com/auth/earthengine',
+          callback: (tokenResponse) => {
+            if (tokenResponse && tokenResponse.access_token) {
+              // 设置GEE认证令牌
+              ee.data.setAuthToken(
+                'auth_token',
+                'oauth2', 
+                tokenResponse.access_token,
+                3600, // 1小时有效期
+                [], 
+                false
+              );
+              resolve();
+            } else {
+              reject(new Error('用户未完成授权或授权失败'));
+            }
+          },
+          error_callback: (error) => {
+            reject(new Error(`认证错误: ${error.message}`));
+          }
+        });
+        
+        // 请求访问令牌
+        tokenClient.requestAccessToken({prompt: 'consent'});
+      });
+    }
+
+    // 初始化GEE
+    async function initializeGEE() {
+      try {
+        // 先进行认证
+        await initializeGEEAuth();
+        
+        // 然后初始化EE
+        return new Promise((resolve, reject) => {
+          ee.initialize(
+            null,
+            null,
+            () => resolve(),
+            (error) => reject(error)
+          );
+        });
+      } catch (error) {
+        throw new Error(`GEE初始化失败: ${error.message}`);
+      }
+    }
+
+    // 在您的initApp函数中使用
+    async function initApp() {
+      try {
+        // ...其他初始化代码...
+        
+        // 初始化GEE
+        await initializeGEE();
+        
+        // ...剩余代码...
+      } catch (error) {
+        console.error('初始化错误:', error);
+        // 显示错误和重试按钮
+      }
+    }
+  </script>
 </body>
 </html>
