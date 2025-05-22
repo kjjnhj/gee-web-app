@@ -58,7 +58,7 @@
       width: 100%;
       height: 100%;
       border-radius: 6px;
-      background-color: #e8e8e8; /* 添加背景色 */
+      background-color: #e8e8e8;
     }
     
     .controls {
@@ -74,19 +74,14 @@
     
     .control-group {
       display: flex;
-      align-items: center;
       gap: 10px;
     }
     
     select, button {
-      padding: 8px 15px;
+      padding: 8px 12px;
       border-radius: 4px;
-      font-size: 14px;
-    }
-    
-    select {
       border: 1px solid #ddd;
-      background-color: #f9f9f9;
+      font-family: inherit;
     }
     
     button {
@@ -94,7 +89,7 @@
       color: white;
       border: none;
       cursor: pointer;
-      transition: background-color 0.2s;
+      transition: background-color 0.3s;
     }
     
     button:hover {
@@ -107,19 +102,24 @@
     }
     
     #status {
-      padding: 10px;
+      padding: 8px;
       border-radius: 4px;
-      display: inline-block;
+      margin-left: auto;
     }
     
     .status-info {
-      background-color: #e8f0fe;
-      color: var(--info-color);
+      background-color: var(--info-color);
+      color: white;
     }
     
     .status-error {
-      background-color: #fce8e6;
-      color: var(--error-color);
+      background-color: var(--error-color);
+      color: white;
+    }
+    
+    #water-chart {
+      width: 100%;
+      height: 100%;
     }
   </style>
 </head>
@@ -131,16 +131,12 @@
     
     <div class="controls">
       <div class="control-group">
-        <label for="year-range">年份范围:</label>
         <select id="year-range" disabled>
-          <option value="">加载中...</option>
+          <option value="">加载年份中...</option>
         </select>
-      </div>
-      
-      <div class="control-group">
-        <span id="status" class="status-info">正在初始化系统...</span>
         <button id="analyze-btn" disabled>开始分析</button>
       </div>
+      <div id="status" class="status-info">正在初始化...</div>
     </div>
     
     <div class="dashboard">
@@ -166,7 +162,11 @@
     const state = {
       map: null,
       mapInitialized: false,
-      initializationAttempts: 0
+      chart: null,
+      eeInitialized: false,
+      currentAnalysis: null,
+      initializationAttempts: 0,
+      layers: []
     };
 
     // 初始化UI组件
@@ -184,7 +184,8 @@
       yearSelect.value = `${currentYear-2}-${currentYear}`;
       yearSelect.disabled = false;
       
-      // 分析按钮初始化
+      // 分析按钮事件绑定
+      document.getElementById('analyze-btn').addEventListener('click', analyzePoyangLake);
       document.getElementById('analyze-btn').disabled = false;
     }
     
@@ -199,10 +200,43 @@
       // 自动隐藏非错误消息
       if (!isError) {
         setTimeout(() => {
-          statusDiv.textContent = '准备就绪';
-          statusDiv.className = 'status-info';
+          if (statusDiv.textContent === message) {
+            statusDiv.textContent = '准备就绪';
+          }
         }, 3000);
       }
+    }
+    
+    // 清理地图资源
+    function cleanupMap() {
+      // 移除所有图层
+      state.layers.forEach(layer => {
+        try {
+          state.map && state.map.removeLayer(layer);
+        } catch (e) {
+          console.warn('移除图层失败:', e);
+        }
+      });
+      state.layers = [];
+      
+      // 移除地图实例
+      if (state.map) {
+        try {
+          state.map.remove();
+        } catch (e) {
+          console.warn('移除地图实例失败:', e);
+        }
+        state.map = null;
+      }
+      
+      // 清理DOM残留
+      const container = document.getElementById('map');
+      if (container && container._leaflet_id) {
+        L.DomUtil.remove(container);
+        container._leaflet_id = undefined;
+      }
+      
+      state.mapInitialized = false;
     }
     
     // 安全初始化地图
@@ -222,28 +256,31 @@
 
       try {
         // 清除可能存在的旧实例
-        if (mapContainer._leaflet_id) {
-          L.DomUtil.remove(mapContainer);
-          mapContainer._leaflet_id = undefined;
-        }
-
+        cleanupMap();
+        
         // 创建新地图实例
         state.map = L.map('map', {
-          preferCanvas: true,  // 提高性能
-          renderer: L.canvas() // 使用Canvas渲染器
+          preferCanvas: true,
+          renderer: L.canvas(),
+          zoomControl: false
         }).setView(CONFIG.DEFAULT_VIEW, CONFIG.DEFAULT_ZOOM);
         
+        // 添加控制组件
+        L.control.zoom({ position: 'topright' }).addTo(state.map);
+        
         // 添加底图图层
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        const baseLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
           attribution: '&copy; OpenStreetMap contributors',
           maxZoom: 18
         }).addTo(state.map);
+        state.layers.push(baseLayer);
         
         // 添加Google卫星图层
-        L.tileLayer('https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}', {
+        const satelliteLayer = L.tileLayer('https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}', {
           attribution: 'Google Satellite',
           maxZoom: 20
         }).addTo(state.map);
+        state.layers.push(satelliteLayer);
 
         state.mapInitialized = true;
         state.initializationAttempts = 0;
@@ -253,10 +290,7 @@
         updateStatus(`地图初始化失败: ${error.message}`, true);
         
         // 清理失败实例
-        if (state.map) {
-          state.map.remove();
-          state.map = null;
-        }
+        cleanupMap();
         
         // 延迟重试
         state.initializationAttempts++;
@@ -267,6 +301,12 @@
         }
         return false;
       }
+    }
+    
+    // 分析鄱阳湖水体(示例函数)
+    function analyzePoyangLake() {
+      updateStatus("分析功能将在GEE初始化后实现");
+      // 实际分析逻辑将在GEE初始化后添加
     }
     
     // 主初始化函数
@@ -287,12 +327,8 @@
       }
     }
     
-    // 确保DOM完全加载后初始化
-    if (document.readyState === 'complete') {
-      initApp();
-    } else {
-      window.addEventListener('load', initApp);
-    }
+    // 页面加载完成后初始化
+    window.addEventListener('load', initApp);
   </script>
   
   <!-- 引入GEE核心逻辑 -->
