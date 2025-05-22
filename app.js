@@ -1,33 +1,54 @@
-// 全局变量
-let map;
-let chart;
-let eeInitialized = false;
-const GEE_CLIENT_ID = '43779976395-dm7nk4h1k9vdqpkpe7mmn4nr3k2easdq.apps.googleusercontent.com';
+// 全局配置
+const CONFIG = {
+  GEE_CLIENT_ID: '43779976395-dm7nk4h1k9vdqpkpe7mmn4nr3k2easdq.apps.googleusercontent.com',
+  DEFAULT_VIEW: [29.0, 116.3], // 鄱阳湖默认视角
+  DEFAULT_ZOOM: 8,
+  MAX_RETRIES: 3,
+  RETRY_DELAY: 3000,
+  ANALYSIS_YEARS: { start: 2015 } // 从2015年开始分析
+};
+
+// 全局状态
+const state = {
+  map: null,
+  chart: null,
+  eeInitialized: false,
+  currentAnalysis: null
+};
+
+// DOM 元素引用
+const domElements = {
+  yearRange: document.getElementById('year-range'),
+  analyzeBtn: document.getElementById('analyze-btn'),
+  status: document.getElementById('status')
+};
 
 // 初始化地图
 function initMap() {
   try {
-    map = L.map('map').setView([29.0, 116.3], 8);
+    state.map = L.map('map').setView(CONFIG.DEFAULT_VIEW, CONFIG.DEFAULT_ZOOM);
     
     // 添加底图图层
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      attribution: '&copy; OpenStreetMap contributors'
-    }).addTo(map);
+      attribution: '&copy; OpenStreetMap contributors',
+      maxZoom: 18
+    }).addTo(state.map);
     
     // 添加Google卫星图层
     L.tileLayer('https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}', {
-      attribution: 'Google Satellite'
-    }).addTo(map);
+      attribution: 'Google Satellite',
+      maxZoom: 20
+    }).addTo(state.map);
     
     return true;
   } catch (error) {
-    updateStatus("地图初始化失败: " + error.message, true);
+    updateStatus(`地图初始化失败: ${error.message}`, true);
     return false;
   }
 }
 
 // 加载GEE库
-function loadEELibrary() {
+async function loadEELibrary() {
   return new Promise((resolve, reject) => {
     if (typeof ee !== 'undefined') {
       resolve();
@@ -53,31 +74,30 @@ function loadEELibrary() {
   });
 }
 
-// 初始化GEE认证
-async function initializeGEEAuth() {
+// GEE认证流程
+async function authenticateGEE() {
   return new Promise((resolve, reject) => {
-    if (typeof google === 'undefined' || !google.accounts) {
-      reject(new Error('Google Identity Services库未加载'));
+    if (!window.google || !window.google.accounts) {
+      reject(new Error('Google Identity Services未加载'));
       return;
     }
-    
+
     const tokenClient = google.accounts.oauth2.initTokenClient({
-      client_id: GEE_CLIENT_ID,
+      client_id: CONFIG.GEE_CLIENT_ID,
       scope: 'https://www.googleapis.com/auth/earthengine',
       callback: (tokenResponse) => {
-        if (tokenResponse && tokenResponse.access_token) {
-          // 设置GEE认证令牌
+        if (tokenResponse?.access_token) {
           ee.data.setAuthToken(
             'auth_token',
             'oauth2', 
             tokenResponse.access_token,
-            3600,
-            [], 
+            3600, // 1小时有效期
+            [],
             false
           );
           resolve();
         } else {
-          reject(new Error('用户未完成授权或授权失败'));
+          reject(new Error('用户未授权或授权失败'));
         }
       },
       error_callback: (error) => {
@@ -85,49 +105,41 @@ async function initializeGEEAuth() {
       }
     });
     
-    // 请求访问令牌
-    tokenClient.requestAccessToken({prompt: 'consent'});
+    tokenClient.requestAccessToken({ prompt: 'consent' });
   });
 }
 
 // 初始化GEE
 async function initializeGEE() {
   try {
-    await initializeGEEAuth();
+    await loadEELibrary();
+    await authenticateGEE();
     
     return new Promise((resolve, reject) => {
       ee.initialize(
         null,
         null,
         () => {
-          eeInitialized = true;
+          state.eeInitialized = true;
           resolve();
         },
         (error) => reject(error)
       );
     });
   } catch (error) {
-    throw new Error(`GEE初始化错误: ${error.message}`);
+    throw new Error(`GEE初始化失败: ${error.message}`);
   }
 }
 
 // 更新状态显示
 function updateStatus(message, isError = false) {
-  const statusDiv = document.getElementById('status');
-  if (!statusDiv) return;
+  if (!domElements.status) return;
   
-  statusDiv.textContent = message;
-  statusDiv.className = isError ? 'status-error' : 'status-info';
+  domElements.status.textContent = message;
+  domElements.status.className = isError ? 'status-error' : 'status-info';
   
   if (isError) {
     console.error(message);
-    
-    // 添加重试按钮
-    const retryBtn = document.createElement('button');
-    retryBtn.className = 'retry-btn';
-    retryBtn.textContent = '重试初始化';
-    retryBtn.onclick = initApp;
-    statusDiv.appendChild(retryBtn);
   } else {
     console.log(message);
   }
@@ -175,22 +187,32 @@ function getEEData(eeObject, property) {
 
 // 分析鄱阳湖水体
 async function analyzePoyangLake() {
-  if (!eeInitialized) {
+  if (!state.eeInitialized) {
     updateStatus("GEE未初始化", true);
     return;
   }
 
   try {
-    const yearRange = document.getElementById('year-range').value.split('-');
+    const yearRange = domElements.yearRange.value.split('-');
     const startYear = parseInt(yearRange[0]);
     const endYear = parseInt(yearRange[1]);
     
     updateStatus(`正在分析${startYear}-${endYear}年鄱阳湖水体...`);
+    domElements.analyzeBtn.disabled = true;
+    
+    // 清除之前的分析结果
+    if (state.currentAnalysis) {
+      state.map.removeLayer(state.currentAnalysis);
+    }
+    if (state.chart) {
+      state.chart.destroy();
+    }
     
     const poyang = getPoyangLakeBoundary();
     const years = ee.List.sequence(startYear, endYear);
     const months = ee.List.sequence(1, 12);
     
+    // 获取时间序列数据
     const timeSeries = ee.FeatureCollection(years.map(function(year) {
       return months.map(function(month) {
         const startDate = ee.Date.fromYMD(year, month, 1);
@@ -221,122 +243,109 @@ async function analyzePoyangLake() {
       });
     }).flatten());
     
-    // 获取数据用于图表
+    // 获取最新影像
+    const latestImage = await getLatestWaterImage(poyang);
+    state.currentAnalysis = latestImage.layer;
+    state.map.addLayer(latestImage.layer);
+    
+    // 获取时间序列数据
     const dates = await getEEData(timeSeries, 'date');
     const fmValues = await getEEData(timeSeries, 'FM');
     
-    // 季节性分解
-    const trend = calculateMovingAverage(fmValues, 12);
-    const seasonal = calculateSeasonalComponent(fmValues, trend);
-    const residual = calculateResidual(fmValues, trend, seasonal);
+    // 分析时间序列
+    const { trend, seasonal, residual } = analyzeTimeSeries(fmValues);
     
     // 渲染图表
     renderChart(dates, fmValues, trend, seasonal, residual);
     
-    // 显示最新水体影像
-    await displayLatestWaterMap();
-    
     updateStatus(`分析完成 (${startYear}-${endYear})`);
   } catch (error) {
     updateStatus(`分析失败: ${error.message}`, true);
+  } finally {
+    domElements.analyzeBtn.disabled = false;
   }
 }
 
-// 时间序列分析方法
+// 获取最新水体影像
+async function getLatestWaterImage(geometry) {
+  const image = ee.ImageCollection('COPERNICUS/S2_SR_HARMONIZED')
+    .filterBounds(geometry)
+    .filterDate(ee.Date(Date.now()).advance(-3, 'month'), ee.Date(Date.now()))
+    .filter(ee.Filter.lt('CLOUDY_PIXEL_PERCENTAGE', 10))
+    .map(calculateWaterIndices)
+    .median();
+  
+  const waterMask = createWaterMask(image);
+  
+  const mapId = await new Promise((resolve, reject) => {
+    waterMask.getMap({
+      min: 0,
+      max: 1,
+      palette: ['white', 'blue']
+    }, (mapId, error) => {
+      if (error) reject(error);
+      else resolve(mapId);
+    });
+  });
+  
+  return {
+    layer: L.tileLayer(mapId.url, { attribution: 'Water Mask' }),
+    image: waterMask
+  };
+}
+
+// 时间序列分析
+function analyzeTimeSeries(data) {
+  const trend = calculateMovingAverage(data, 12);
+  const seasonal = calculateSeasonalComponent(data, trend);
+  const residual = calculateResidual(data, trend, seasonal);
+  
+  return { trend, seasonal, residual };
+}
+
+// 计算移动平均
 function calculateMovingAverage(data, windowSize) {
   const halfWindow = Math.floor(windowSize / 2);
-  const trend = [];
-  
-  for (let i = 0; i < data.length; i++) {
-    let sum = 0;
-    let count = 0;
-    
-    for (let j = Math.max(0, i - halfWindow); j <= Math.min(data.length - 1, i + halfWindow); j++) {
-      sum += data[j];
-      count++;
-    }
-    
-    trend.push(sum / count);
-  }
-  
-  return trend;
+  return data.map((_, i) => {
+    const start = Math.max(0, i - halfWindow);
+    const end = Math.min(data.length - 1, i + halfWindow);
+    const sum = data.slice(start, end + 1).reduce((a, b) => a + b, 0);
+    return sum / (end - start + 1);
+  });
 }
 
+// 计算季节性成分
 function calculateSeasonalComponent(data, trend) {
-  const seasonal = [];
   const monthlyAverages = Array(12).fill(0);
   const monthlyCounts = Array(12).fill(0);
   
-  for (let i = 0; i < data.length; i++) {
+  data.forEach((value, i) => {
     const month = i % 12;
-    monthlyAverages[month] += (data[i] - trend[i]);
+    monthlyAverages[month] += (value - trend[i]);
     monthlyCounts[month]++;
-  }
+  });
   
   for (let i = 0; i < 12; i++) {
-    monthlyAverages[i] /= monthlyCounts[i];
+    monthlyAverages[i] /= monthlyCounts[i] || 1;
   }
   
-  for (let i = 0; i < data.length; i++) {
-    seasonal.push(monthlyAverages[i % 12]);
-  }
-  
-  return seasonal;
+  return data.map((_, i) => monthlyAverages[i % 12]);
 }
 
+// 计算残差
 function calculateResidual(data, trend, seasonal) {
   return data.map((value, i) => value - trend[i] - seasonal[i]);
-}
-
-// 显示最新水体影像
-async function displayLatestWaterMap() {
-  try {
-    const poyang = getPoyangLakeBoundary();
-    const latestImage = ee.ImageCollection('COPERNICUS/S2_SR_HARMONIZED')
-      .filterBounds(poyang)
-      .filterDate(ee.Date(Date.now()).advance(-3, 'month'), ee.Date(Date.now()))
-      .filter(ee.Filter.lt('CLOUDY_PIXEL_PERCENTAGE', 10))
-      .map(calculateWaterIndices)
-      .median();
-    
-    const waterMask = createWaterMask(latestImage);
-    
-    const mapId = await new Promise((resolve, reject) => {
-      waterMask.getMap({
-        min: 0,
-        max: 1,
-        palette: ['white', 'blue']
-      }, (mapId, error) => {
-        if (error) reject(error);
-        else resolve(mapId);
-      });
-    });
-    
-    if (map && mapId) {
-      map.eachLayer(layer => {
-        if (layer.options && layer.options.attribution === 'Water Mask') {
-          map.removeLayer(layer);
-        }
-      });
-      
-      const tileLayer = L.tileLayer(mapId.url, {
-        attribution: 'Water Mask'
-      }).addTo(map);
-    }
-  } catch (error) {
-    console.error('显示水体影像失败:', error);
-  }
 }
 
 // 渲染图表
 function renderChart(labels, observed, trend, seasonal, residual) {
   const ctx = document.getElementById('water-chart').getContext('2d');
   
-  if (chart) {
-    chart.destroy();
+  if (state.chart) {
+    state.chart.destroy();
   }
   
-  chart = new Chart(ctx, {
+  state.chart = new Chart(ctx, {
     type: 'line',
     data: {
       labels: labels,
@@ -384,20 +393,11 @@ function renderChart(labels, observed, trend, seasonal, residual) {
       },
       scales: {
         x: {
-          title: {
-            display: true,
-            text: '日期'
-          },
-          ticks: {
-            maxRotation: 45,
-            minRotation: 45
-          }
+          title: { display: true, text: '日期' },
+          ticks: { maxRotation: 45, minRotation: 45 }
         },
         y: {
-          title: {
-            display: true,
-            text: '水体面积(平方米)'
-          }
+          title: { display: true, text: '水体面积(平方米)' }
         }
       },
       interaction: {
@@ -411,19 +411,18 @@ function renderChart(labels, observed, trend, seasonal, residual) {
 
 // 初始化年份选择器
 function initYearSelector() {
-  const yearSelect = document.getElementById('year-range');
   const currentYear = new Date().getFullYear();
   
-  yearSelect.innerHTML = '';
-  
-  for (let year = 2015; year <= currentYear; year++) {
+  domElements.yearRange.innerHTML = '';
+  for (let year = CONFIG.ANALYSIS_YEARS.start; year <= currentYear; year++) {
     const option = document.createElement('option');
     option.value = `${year}-${year}`;
     option.textContent = `${year}年`;
-    yearSelect.appendChild(option);
+    domElements.yearRange.appendChild(option);
   }
   
-  yearSelect.value = `${currentYear-2}-${currentYear}`;
+  domElements.yearRange.value = `${currentYear-2}-${currentYear}`;
+  domElements.yearRange.disabled = false;
 }
 
 // 初始化应用
@@ -436,11 +435,8 @@ async function initApp() {
       throw new Error('地图初始化失败');
     }
     
-    // 2. 加载GEE库
-    await loadEELibrary();
-    
-    // 3. 初始化GEE认证
-    let retries = 3;
+    // 2. 初始化GEE
+    let retries = CONFIG.MAX_RETRIES;
     while (retries > 0) {
       try {
         await initializeGEE();
@@ -449,13 +445,14 @@ async function initApp() {
         retries--;
         if (retries === 0) throw error;
         updateStatus(`初始化失败，${retries}次重试中...`);
-        await new Promise(resolve => setTimeout(resolve, 3000));
+        await new Promise(resolve => setTimeout(resolve, CONFIG.RETRY_DELAY));
       }
     }
     
-    // 4. 初始化其他组件
+    // 3. 初始化UI组件
     initYearSelector();
-    document.getElementById('analyze-btn').addEventListener('click', analyzePoyangLake);
+    domElements.analyzeBtn.addEventListener('click', analyzePoyangLake);
+    domElements.analyzeBtn.disabled = false;
     
     updateStatus("系统准备就绪，请选择年份后点击分析按钮");
   } catch (error) {
