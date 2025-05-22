@@ -175,21 +175,21 @@ async function reloadMap() {
   return initializeMap();
 }
 
-// 导出公共接口
-export const MapService = {
+// 将MapService暴露为全局变量
+window.MapService = {
   initialize: ensureMapInitialization,
   reload: reloadMap,
   getMap: () => mapState.instance,
   isInitialized: () => mapState.isInitialized
 };
 
-// 自动初始化(可选)
-if (process.env.AUTO_INIT_MAP !== 'false') {
-  ensureMapInitialization().then(success => {
+// 页面加载完成后自动初始化
+window.addEventListener('load', () => {
+  MapService.initialize().then(success => {
     if (success) {
       console.log('地图自动初始化成功');
     } else {
       console.error('地图自动初始化失败');
     }
   });
-}
+});
