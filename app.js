@@ -11,21 +11,52 @@ const CONFIG = {
 // 全局状态
 const state = {
   map: null,
+  mapInitialized: false,
   chart: null,
   eeInitialized: false,
-  currentAnalysis: null
+  currentAnalysis: null,
+  initializationAttempts: 0
 };
 
 // DOM 元素引用
 const domElements = {
   yearRange: document.getElementById('year-range'),
   analyzeBtn: document.getElementById('analyze-btn'),
-  status: document.getElementById('status')
+  status: document.getElementById('status'),
+  mapContainer: document.getElementById('map')
 };
 
-// 初始化地图
+/**
+ * 安全初始化地图函数
+ * 解决重复初始化问题和错误处理
+ */
 function initMap() {
+  // 检查是否已经成功初始化
+  if (state.mapInitialized && state.map) {
+    console.warn('地图已经初始化，跳过重复初始化');
+    return true;
+  }
+
+  // 检查容器是否存在
+  if (!domElements.mapContainer) {
+    updateStatus('地图容器未找到', true);
+    return false;
+  }
+
+  // 防止无限重试
+  if (state.initializationAttempts >= CONFIG.MAX_RETRIES) {
+    updateStatus('已达到最大初始化尝试次数', true);
+    return false;
+  }
+
   try {
+    // 清除可能存在的旧实例
+    if (domElements.mapContainer._leaflet_id) {
+      L.DomUtil.remove(domElements.mapContainer);
+      domElements.mapContainer._leaflet_id = undefined;
+    }
+
+    // 创建新地图实例
     state.map = L.map('map').setView(CONFIG.DEFAULT_VIEW, CONFIG.DEFAULT_ZOOM);
     
     // 添加底图图层
@@ -39,11 +70,38 @@ function initMap() {
       attribution: 'Google Satellite',
       maxZoom: 20
     }).addTo(state.map);
-    
+
+    state.mapInitialized = true;
+    state.initializationAttempts = 0; // 重置尝试计数器
+    updateStatus('地图初始化成功');
     return true;
   } catch (error) {
+    state.initializationAttempts++;
     updateStatus(`地图初始化失败: ${error.message}`, true);
+    
+    // 清理失败实例
+    if (state.map) {
+      state.map.remove();
+      state.map = null;
+    }
+    
+    // 延迟重试
+    if (state.initializationAttempts < CONFIG.MAX_RETRIES) {
+      setTimeout(initMap, CONFIG.RETRY_DELAY);
+    }
     return false;
+  }
+}
+
+/**
+ * 销毁地图实例
+ */
+function destroyMap() {
+  if (state.map) {
+    state.map.remove();
+    state.map = null;
+    state.mapInitialized = false;
+    console.log('地图已销毁');
   }
 }
 
