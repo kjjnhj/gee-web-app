@@ -6,7 +6,7 @@
     DEFAULT_ZOOM: 8,
     MAX_RETRIES: 3,
     RETRY_DELAY: 3000,
-    GEE_CLIENT_ID: 'lkls031201' // 替换为你的GEE客户端ID
+    GEE_CLIENT_ID: 'YOUR_GEE_CLIENT_ID' // 替换为你的GEE客户端ID
   };
 
   // 全局状态
@@ -17,7 +17,8 @@
     eeInitialized: false,
     currentAnalysis: null,
     initializationAttempts: 0,
-    layers: []
+    layers: [],
+    isGapiLoading: false
   };
 
   // DOM元素引用
@@ -152,6 +153,45 @@
     }
   }
 
+  // 加载Google API
+  function loadGoogleAPI() {
+    return new Promise((resolve, reject) => {
+      if (window.google && window.google.accounts) {
+        resolve();
+        return;
+      }
+
+      if (state.isGapiLoading) {
+        // 如果已经在加载中，等待加载完成
+        const checkInterval = setInterval(() => {
+          if (window.google && window.google.accounts) {
+            clearInterval(checkInterval);
+            resolve();
+          }
+        }, 100);
+        return;
+      }
+
+      state.isGapiLoading = true;
+      const script = document.createElement('script');
+      script.src = 'https://accounts.google.com/gsi/client';
+      script.onload = () => {
+        if (window.google && window.google.accounts) {
+          state.isGapiLoading = false;
+          resolve();
+        } else {
+          state.isGapiLoading = false;
+          reject(new Error('Google身份服务加载失败'));
+        }
+      };
+      script.onerror = () => {
+        state.isGapiLoading = false;
+        reject(new Error('无法加载Google身份服务'));
+      };
+      document.head.appendChild(script);
+    });
+  }
+
   // 加载GEE库
   function loadEELibrary() {
     return new Promise((resolve, reject) => {
@@ -192,15 +232,19 @@
         scope: 'https://www.googleapis.com/auth/earthengine',
         callback: (tokenResponse) => {
           if (tokenResponse?.access_token) {
-            ee.data.setAuthToken(
-              'auth_token',
-              'oauth2', 
-              tokenResponse.access_token,
-              3600,
-              [],
-              false
-            );
-            resolve();
+            try {
+              ee.data.setAuthToken(
+                'auth_token',
+                'oauth2', 
+                tokenResponse.access_token,
+                3600,
+                [],
+                false
+              );
+              resolve();
+            } catch (error) {
+              reject(new Error(`设置认证令牌失败: ${error.message}`));
+            }
           } else {
             reject(new Error('用户未授权或授权失败'));
           }
@@ -217,18 +261,28 @@
   // 初始化GEE
   async function initializeGEE() {
     try {
+      updateStatus("正在加载Google API...");
+      await loadGoogleAPI();
+      
+      updateStatus("正在加载GEE库...");
       await loadEELibrary();
+      
+      updateStatus("正在进行GEE认证...");
       await authenticateGEE();
       
       return new Promise((resolve, reject) => {
+        updateStatus("正在初始化GEE...");
         ee.initialize(
           null,
           null,
           () => {
             state.eeInitialized = true;
+            updateStatus("GEE初始化成功");
             resolve();
           },
-          (error) => reject(error)
+          (error) => {
+            reject(new Error(`GEE初始化错误: ${error.message || error}`));
+          }
         );
       });
     } catch (error) {
@@ -497,31 +551,57 @@
     try {
       updateStatus("正在初始化系统...");
       
+      // 1. 初始化地图
       if (!initMap()) {
         throw new Error('地图初始化失败');
       }
       
+      // 2. 初始化GEE（带重试机制）
       let retries = CONFIG.MAX_RETRIES;
+      let lastError = null;
+      
       while (retries > 0) {
         try {
           await initializeGEE();
+          lastError = null;
           break;
         } catch (error) {
+          lastError = error;
           retries--;
-          if (retries === 0) throw error;
-          updateStatus(`初始化失败，${retries}次重试中...`);
+          if (retries === 0) break;
+          
+          updateStatus(`GEE初始化失败，${retries}次重试中...`, true);
           await new Promise(resolve => setTimeout(resolve, CONFIG.RETRY_DELAY));
         }
       }
       
+      if (lastError) {
+        throw lastError;
+      }
+      
+      // 3. 初始化UI组件
       initUIComponents();
       
       updateStatus("系统准备就绪，请选择年份后点击分析按钮");
     } catch (error) {
+      console.error('初始化错误详情:', error);
       updateStatus(`初始化失败: ${error.message}`, true);
+      
+      // 提供更多错误信息
+      if (error.message.includes('无法加载GEE库')) {
+        updateStatus("提示: 请检查网络连接或防火墙设置", true);
+      } else if (error.message.includes('Google Identity Services')) {
+        updateStatus("提示: 需要加载Google身份服务", true);
+      } else if (error.message.includes('GEE客户端ID')) {
+        updateStatus("提示: 请检查GEE客户端ID配置", true);
+      }
     }
   }
 
   // 启动应用
-  window.addEventListener('load', initApp);
+  if (document.readyState === 'complete') {
+    initApp();
+  } else {
+    window.addEventListener('load', initApp);
+  }
 })();
