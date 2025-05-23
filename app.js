@@ -6,7 +6,7 @@
     DEFAULT_ZOOM: 8,
     MAX_RETRIES: 3,
     RETRY_DELAY: 3000,
-    GEE_CLIENT_ID: 'YOUR_GEE_CLIENT_ID' // 替换为你的GEE客户端ID
+    GEE_CLIENT_ID: 'lkls031201' // 替换为你的GEE客户端ID
   };
 
   // 全局状态
