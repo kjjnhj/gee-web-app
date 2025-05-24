@@ -3,9 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>鄱阳湖水体分析系统（EVI优化版）</title>
-  <!-- 引入Chart.js -->
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <title>鄱阳湖水体分析系统</title>
   <style>
     :root {
       --primary-color: #4285F4;
@@ -31,27 +29,6 @@
     .header {
       text-align: center;
       margin-bottom: 20px;
-    }
-    
-    .dashboard {
-      display: grid;
-      grid-template-columns: 2fr 1fr;
-      gap: 20px;
-      margin-bottom: 20px;
-    }
-    
-    .card {
-      background-color: var(--card-bg);
-      border-radius: 8px;
-      box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-      padding: 15px;
-      height: 500px;
-    }
-    
-    #map {
-      width: 100%;
-      height: 100%;
-      border-radius: 6px;
     }
     
     .controls {
@@ -109,31 +86,37 @@
       color: white;
     }
     
-    #water-chart {
-      width: 100%;
-      height: 100%;
-    }
-    
-    @media (max-width: 768px) {
-      .dashboard {
-        grid-template-columns: 1fr;
-      }
-      .card {
-        height: 400px;
-      }
+    label {
+      font-weight: bold;
+      margin-right: 5px;
     }
   </style>
 </head>
 <body>
   <div class="container">
     <div class="header">
-      <h1>鄱阳湖水体分析系统（EVI优化版）</h1>
-      <p>结合mNDWI和EVI指数的精确水体检测</p>
+      <h1>鄱阳湖水体分析系统</h1>
+      <p>基于卫星影像的水体变化监测</p>
     </div>
     
+    <!-- 解决方案1：使用aria-label -->
+    <!--
     <div class="controls">
+      <select id="year-range" disabled aria-label="选择分析年份">
+        <option value="">加载年份中...</option>
+      </select>
+      <button id="analyze-btn" disabled>开始分析</button>
+      <button id="visualize-btn" disabled>显示当前水体</button>
+      <div id="status" class="status-info">初始化中...</div>
+    </div>
+    -->
+    
+    <!-- 解决方案2：使用显式label（推荐） -->
+    <div class="controls">
+      <label for="year-range">选择年份：</label>
       <select id="year-range" disabled>
         <option value="">加载年份中...</option>
+        <!-- 年份选项将通过JavaScript动态加载 -->
       </select>
       <button id="analyze-btn" disabled>开始分析</button>
       <button id="visualize-btn" disabled>显示当前水体</button>
@@ -141,12 +124,7 @@
     </div>
     
     <div class="dashboard">
-      <div class="card">
-        <div id="map"></div>
-      </div>
-      <div class="card">
-        <canvas id="water-chart"></canvas>
-      </div>
+      <!-- 地图和图表容器将通过JavaScript动态生成 -->
     </div>
     
     <div class="legend">
@@ -160,28 +138,30 @@
 
   <!-- 加载Google Maps API -->
   <script>
-    (function(g){
-      var h,a,k,p="Google Maps JavaScript API",
-      c="google",l="importLibrary",q="__ib__",
-      m=document,b=window;b=b||{},b[l]||(m.addEventListener("load",
-      function(){
-        g=h=function(){return h.q&&h.q.push(arguments)||h},h.q=[],
-        g.l=+new Date,a=m.createElement("script"),
-        k=m.getElementsByTagName("script")[0],
-        a.async=1,
-        a.src="https://maps."+c+"apis.com/maps/api/js?key=AIzaSyCNwzyHL8XUS9UW3G9qrZymFVgD7Hqhgpc&loading=async&libraries=visualization&map_ids=8ad8db94521eb93e4adf16dc&callback="+q,
-        a.onerror=function(){h=void 0},
-        k.parentNode.insertBefore(a,k)
-      }),
-      g=function(){return h?h.apply(this,arguments):void 0},
-      b[q]=g
-    })({
-      key: "AIzaSyCNwzyHL8XUS9UW3G9qrZymFVgD7Hqhgpc",
-      v: "weekly",
-      mapIds: ["8ad8db94521eb93e4adf16dc"]
-    });
+    // 初始化函数将在API加载完成后调用
+    function initApp() {
+      // 这里将初始化地图和应用程序
+      console.log("应用初始化完成");
+      
+      // 示例：启用控件
+      document.getElementById('year-range').disabled = false;
+      document.getElementById('analyze-btn').disabled = false;
+      document.getElementById('visualize-btn').disabled = false;
+      document.getElementById('status').textContent = "准备就绪";
+      
+      // 动态加载年份选项
+      const currentYear = new Date().getFullYear();
+      const yearSelect = document.getElementById('year-range');
+      for (let year = 2015; year <= currentYear; year++) {
+        const option = document.createElement('option');
+        option.value = year;
+        option.textContent = year;
+        yearSelect.appendChild(option);
+      }
+    }
   </script>
-
+  <script src="https://maps.googleapis.com/maps/api/js?key=YOUR_API_KEY&callback=initApp" async defer></script>
+  
   <!-- 主应用逻辑 -->
   <script src="app.js"></script>
 </body>
