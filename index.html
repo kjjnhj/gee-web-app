@@ -2,6 +2,8 @@
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8">
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+  <meta http-equiv="Content-Security-Policy" content="frame-ancestors 'self'; default-src 'self' https://maps.googleapis.com">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>鄱阳湖水体分析系统</title>
   <style>
@@ -132,7 +134,7 @@
     
     <div class="controls">
       <label for="year-range">选择年份：</label>
-      <select id="year-range" disabled>
+      <select id="year-range" disabled aria-label="选择分析年份">
         <option value="">加载年份中...</option>
       </select>
       <button id="analyze-btn" disabled>开始分析</button>
@@ -158,92 +160,112 @@
     </div>
   </div>
 
-  <!-- 加载Google Maps API -->
+  <!-- 优化后的Google Maps API加载方式 -->
   <script>
-    // 全局状态
-    const state = {
+    // 全局状态管理
+    const AppState = {
       map: null,
-      currentAnalysis: null
+      currentAnalysis: null,
+      isInitialized: false
     };
 
-    // DOM元素引用
-    const dom = {
+    // DOM元素缓存
+    const DOM = {
       status: document.getElementById('status'),
       analyzeBtn: document.getElementById('analyze-btn'),
       visualizeBtn: document.getElementById('visualize-btn'),
-      yearRange: document.getElementById('year-range')
+      yearRange: document.getElementById('year-range'),
+      mapContainer: document.getElementById('map'),
+      chartCanvas: document.getElementById('water-chart')
     };
 
-    // 初始化地图
-    function initMap() {
-      const mapElement = document.getElementById('map');
-      if (!mapElement) {
-        console.error('地图容器未找到');
-        return;
+    // 错误处理系统
+    const ErrorHandler = {
+      showError: (message) => {
+        DOM.status.textContent = message;
+        DOM.status.className = "status-error";
+        console.error(message);
+      },
+      handleGMapsError: () => {
+        this.showError("地图服务加载失败，请检查网络连接后刷新页面");
       }
+    };
 
-      state.map = new google.maps.Map(mapElement, {
-        center: { lat: 29.0, lng: 116.3 },
-        zoom: 8,
-        mapId: "8ad8db94521eb93e4adf16dc"
-      });
-    }
+    // 地图服务初始化
+    const MapService = {
+      init: () => {
+        if (!DOM.mapContainer) {
+          ErrorHandler.showError("地图容器未找到");
+          return false;
+        }
 
-    // 初始化应用
+        try {
+          AppState.map = new google.maps.Map(DOM.mapContainer, {
+            center: { lat: 29.0, lng: 116.3 },
+            zoom: 8,
+            mapId: "8ad8db94521eb93e4adf16dc"
+          });
+          return true;
+        } catch (error) {
+          ErrorHandler.showError(`地图初始化失败: ${error.message}`);
+          return false;
+        }
+      }
+    };
+
+    // 应用初始化
     function initApp() {
       try {
-        initMap();
+        // 初始化地图
+        if (!MapService.init()) return;
         
         // 初始化年份选择器
         const currentYear = new Date().getFullYear();
-        dom.yearRange.innerHTML = '';
+        DOM.yearRange.innerHTML = '';
         for (let year = 2015; year <= currentYear; year++) {
           const option = document.createElement('option');
           option.value = year;
           option.textContent = year;
-          dom.yearRange.appendChild(option);
+          DOM.yearRange.appendChild(option);
         }
         
         // 启用控件
-        dom.yearRange.disabled = false;
-        dom.analyzeBtn.disabled = false;
-        dom.visualizeBtn.disabled = false;
+        DOM.yearRange.disabled = false;
+        DOM.analyzeBtn.disabled = false;
+        DOM.visualizeBtn.disabled = false;
         
         // 更新状态
-        dom.status.textContent = "准备就绪";
-        dom.status.className = "status-info";
+        DOM.status.textContent = "准备就绪";
+        DOM.status.className = "status-info";
+        AppState.isInitialized = true;
 
       } catch (error) {
-        console.error('初始化失败:', error);
-        dom.status.textContent = "初始化失败: " + error.message;
-        dom.status.className = "status-error";
+        ErrorHandler.showError(`系统初始化失败: ${error.message}`);
       }
     }
 
-    // 错误处理函数
-    function handleGMapsError() {
-      dom.status.textContent = "Google Maps 加载失败，请刷新重试";
-      dom.status.className = "status-error";
-    }
-  </script>
-
-  <!-- 使用推荐方式加载API -->
-  <script>
-    // 创建加载脚本的函数
+    // 安全加载Google Maps API
     function loadGoogleMaps() {
-      const script = document.createElement('script');
-      script.src = `https://maps.googleapis.com/maps/api/js?key=AIzaSyCNwzyHL8XUS9UW3G9qrZymFVgD7Hqhgpc&loading=async&libraries=visualization&callback=initApp`;
-      script.async = true;
-      script.defer = true;
-      script.onerror = handleGMapsError;
-      document.head.appendChild(script);
+      return new Promise((resolve, reject) => {
+        const script = document.createElement('script');
+        script.src = `https://maps.googleapis.com/maps/api/js?key=AIzaSyCNwzyHL8XUS9UW3G9qrZymFVgD7Hqhgpc&loading=async&libraries=visualization&callback=initApp`;
+        script.async = true;
+        script.defer = true;
+        script.onerror = () => {
+          ErrorHandler.handleGMapsError();
+          reject(new Error('Failed to load Google Maps API'));
+        };
+        document.head.appendChild(script);
+      });
     }
 
-    // 文档加载完成后加载API
-    document.addEventListener('DOMContentLoaded', loadGoogleMaps);
+    // 启动应用
+    document.addEventListener('DOMContentLoaded', () => {
+      loadGoogleMaps().catch(ErrorHandler.handleGMapsError);
+    });
   </script>
   
-  <!-- 主应用逻辑 -->
-  <script src="app.js"></script>
+  <!-- 主应用逻辑（使用版本控制） -->
+  <script src="app.js?v=1.0.1"></script>
 </body>
 </html>
