@@ -5,8 +5,18 @@
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>鄱阳湖水体分析系统</title>
-  <!-- 内联样式提取到外部样式块 -->
-  <style nonce="r4nd0mN0nc3">
+  <!-- CSP应通过HTTP头设置，这里是示例meta标签 -->
+  <meta http-equiv="Content-Security-Policy" content="
+    default-src 'self';
+    script-src 'self' https://maps.googleapis.com 'unsafe-inline' 'unsafe-eval';
+    style-src 'self' 'unsafe-inline';
+    img-src 'self' data: https://*.gstatic.com https://maps.googleapis.com;
+    connect-src 'self' https://maps.googleapis.com;
+    worker-src 'self' blob:;
+    frame-src 'none';
+    object-src 'none';
+  ">
+  <style>
     :root {
       --primary-color: #4285F4;
       --error-color: #d93025;
@@ -115,7 +125,7 @@
       margin-right: 5px;
     }
 
-    /* 图例样式从内联迁移至此 */
+    /* 图例样式 */
     .water-legend {
       color: #4186F0;
       display: inline-block;
@@ -133,16 +143,6 @@
       }
     }
   </style>
-  <!-- CSP应通过HTTP头设置，这里是示例 -->
-  <meta http-equiv="Content-Security-Policy" content="
-    default-src 'self';
-    script-src 'self' https://maps.googleapis.com 'nonce-r4nd0mN0nc3';
-    style-src 'self' 'nonce-r4nd0mN0nc3';
-    img-src 'self' data:;
-    connect-src 'self' https://maps.googleapis.com;
-    frame-src 'none';
-    object-src 'none';
-  ">
 </head>
 <body>
   <div class="container">
@@ -179,8 +179,7 @@
     </div>
   </div>
 
-  <!-- 使用nonce保护的内联脚本 -->
-  <script nonce="r4nd0mN0nc3">
+  <script>
     // 全局状态管理
     const AppState = {
       map: null,
@@ -267,7 +266,7 @@
     function loadGoogleMaps() {
       return new Promise((resolve, reject) => {
         const script = document.createElement('script');
-        script.src = `https://maps.googleapis.com/maps/api/js?key=AIzaSyCNwzyHL8XUS9UW3G9qrZymFVgD7Hqhgpc&loading=async&libraries=visualization&callback=initApp`;
+        script.src = `https://maps.googleapis.com/maps/api/js?key=YOUR_ACTUAL_API_KEY&loading=async&libraries=visualization&callback=initApp`;
         script.async = true;
         script.defer = true;
         script.onerror = () => {
@@ -284,7 +283,7 @@
     });
   </script>
   
-  <!-- 主应用逻辑（使用版本控制） -->
-  <script src="app.js?v=1.0.1" nonce="r4nd0mN0nc3"></script>
+  <!-- 主应用逻辑 -->
+  <script src="app.js?v=1.0.1"></script>
 </body>
 </html>
