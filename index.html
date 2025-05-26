@@ -120,8 +120,7 @@
           return;
         }
 
-        const tileUrl = `https://earthengine.googleapis.com/map/${layer.mapid}/{z}/{x}/{y}` +
-    (layer.token ? `?token=${layer.token}` : '');
+        const tileUrl = `https://earthengine.googleapis.com/map/${layer.mapid}/{z}/{x}/{y}` + (layer.token ? `?token=${layer.token}` : '');
 
         map.overlayMapTypes.clear();
         const geeOverlay = new google.maps.ImageMapType({
