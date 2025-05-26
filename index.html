@@ -3,10 +3,10 @@
 <head>
   <meta charset="UTF-8">
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
-  <meta http-equiv="Content-Security-Policy" content="frame-ancestors 'self'; default-src 'self' https://maps.googleapis.com">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>鄱阳湖水体分析系统</title>
-  <style>
+  <!-- 内联样式提取到外部样式块 -->
+  <style nonce="r4nd0mN0nc3">
     :root {
       --primary-color: #4285F4;
       --error-color: #d93025;
@@ -115,6 +115,15 @@
       margin-right: 5px;
     }
 
+    /* 图例样式从内联迁移至此 */
+    .water-legend {
+      color: #4186F0;
+      display: inline-block;
+      width: 1em;
+      height: 1em;
+      margin-right: 5px;
+    }
+
     @media (max-width: 768px) {
       .dashboard {
         grid-template-columns: 1fr;
@@ -124,6 +133,16 @@
       }
     }
   </style>
+  <!-- CSP应通过HTTP头设置，这里是示例 -->
+  <meta http-equiv="Content-Security-Policy" content="
+    default-src 'self';
+    script-src 'self' https://maps.googleapis.com 'nonce-r4nd0mN0nc3';
+    style-src 'self' 'nonce-r4nd0mN0nc3';
+    img-src 'self' data:;
+    connect-src 'self' https://maps.googleapis.com;
+    frame-src 'none';
+    object-src 'none';
+  ">
 </head>
 <body>
   <div class="container">
@@ -154,14 +173,14 @@
     <div class="legend">
       <h3>图例说明：</h3>
       <ul>
-        <li><span style="color:#4186F0">■</span> 蓝色区域：检测到的水体</li>
+        <li><span class="water-legend">■</span> 蓝色区域：检测到的水体</li>
         <li>图表显示历史水体面积变化</li>
       </ul>
     </div>
   </div>
 
-  <!-- 优化后的Google Maps API加载方式 -->
-  <script>
+  <!-- 使用nonce保护的内联脚本 -->
+  <script nonce="r4nd0mN0nc3">
     // 全局状态管理
     const AppState = {
       map: null,
@@ -266,6 +285,6 @@
   </script>
   
   <!-- 主应用逻辑（使用版本控制） -->
-  <script src="app.js?v=1.0.1"></script>
+  <script src="app.js?v=1.0.1" nonce="r4nd0mN0nc3"></script>
 </body>
 </html>
