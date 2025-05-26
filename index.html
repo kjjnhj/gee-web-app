@@ -32,11 +32,25 @@
     </div>
   </div>
 
-  <!-- Earth Engine 脚本 -->
-  <script src="https://earthengine.googleapis.com/earthengine.js"></script>
-
+  <!-- Google API 与 Earth Engine 初始化 -->
+  <script src="https://apis.google.com/js/api.js"></script>
   <script>
-    // 初始化年份选择框
+    let eeLoaded = false;
+
+    function loadEarthEngine() {
+      gapi.load('client', () => {
+        gapi.client.load('https://earthengine.googleapis.com/earthengine/v1alpha', 'v1', () => {
+          const script = document.createElement('script');
+          script.src = 'https://earthengine.googleapis.com/earthengine.js';
+          script.onload = () => {
+            eeLoaded = true;
+            initApp();
+          };
+          document.head.appendChild(script);
+        });
+      });
+    }
+
     function initializeYearRange() {
       const yearSelect = document.getElementById('yearRange');
       yearSelect.innerHTML = '';
@@ -55,8 +69,14 @@
       status.className = 'status-info';
     }
 
-    // 全局回调函数，确保 Google Maps API 回调可用
     function initApp() {
+      if (!eeLoaded || typeof ee === 'undefined') {
+        const status = document.getElementById('status');
+        status.textContent = 'Earth Engine 加载失败，请检查网络连接。';
+        status.className = 'status-error';
+        return;
+      }
+
       document.getElementById('status').textContent = '地图加载中...';
       const map = new google.maps.Map(document.getElementById('map'), {
         center: { lat: 29.0, lng: 116.3 },
@@ -64,20 +84,17 @@
       });
 
       document.getElementById('status').textContent = 'Earth Engine 初始化中...';
-      ee.initialize()
-        .then(() => {
-          console.log('Earth Engine 初始化成功');
-          initializeYearRange();
-        })
-        .catch(error => {
-          console.error('Earth Engine 初始化失败:', error);
-          const status = document.getElementById('status');
-          status.textContent = 'Earth Engine 初始化失败！';
-          status.className = 'status-error';
-        });
+      ee.initialize(null, null, () => {
+        console.log('Earth Engine 初始化成功');
+        initializeYearRange();
+      }, (err) => {
+        console.error('Earth Engine 初始化失败:', err);
+        const status = document.getElementById('status');
+        status.textContent = 'Earth Engine 初始化失败！';
+        status.className = 'status-error';
+      });
     }
 
-    // 分析按钮事件
     document.addEventListener('DOMContentLoaded', function() {
       document.getElementById('analyze-btn').addEventListener('click', function() {
         const year = document.getElementById('yearRange').value;
@@ -100,10 +117,10 @@
       });
     });
 
-    // 异步加载 Google Maps API
+    // 加载 Google Maps
     (function loadGoogleMaps() {
       const script = document.createElement('script');
-      script.src = 'https://maps.googleapis.com/maps/api/js?key=AIzaSyCNwzyHL8XUS9UW3G9qrZymFVgD7Hqhgpc&callback=initApp';
+      script.src = 'https://maps.googleapis.com/maps/api/js?key=AIzaSyCNwzyHL8XUS9UW3G9qrZymFVgD7Hqhgpc&callback=loadEarthEngine';
       script.async = true;
       script.defer = true;
       script.onerror = () => {
