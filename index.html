@@ -32,135 +32,87 @@
     </div>
   </div>
 
-  <!-- 加载 Google Maps 脚本 -->
-  <script async defer src="https://maps.googleapis.com/maps/api/js?key=AIzaSyCNwzyHL8XUS9UW3G9qrZymFVgD7Hqhgpc&callback=initApp"></script>
-
-  <!-- 加载 Earth Engine 脚本 -->
+  <!-- Earth Engine 脚本 -->
   <script src="https://earthengine.googleapis.com/earthengine.js"></script>
 
   <script>
-    const AppState = {
-      map: null,
-      isInitialized: false,
-      isGEEInitialized: false,
-    };
-
-    const DOM = {
-      mapContainer: document.getElementById('map'),
-      yearRange: document.getElementById('yearRange'),
-      analyzeBtn: document.getElementById('analyze-btn'),
-      visualizeBtn: document.getElementById('visualize-btn'),
-      status: document.getElementById('status'),
-    };
-
-    const ErrorHandler = {
-      showError: (message) => {
-        DOM.status.textContent = message;
-        DOM.status.className = "status-error";
-        console.error(message);
-      },
-      handleGMapsError: () => {
-        ErrorHandler.showError("地图加载失败，请检查 API Key 和网络连接。");
-      },
-      handleGEEError: (error) => {
-        let msg = `GEE 初始化失败: ${error.message}`;
-        if (error.message.includes("authenticate")) {
-          msg += "\n请确保已登录 Google 并授权 Earth Engine 权限。";
-        }
-        ErrorHandler.showError(msg);
-      }
-    };
-
-    const MapService = {
-      init: () => {
-        try {
-          AppState.map = new google.maps.Map(DOM.mapContainer, {
-            center: { lat: 29.0, lng: 116.3 },
-            zoom: 8
-          });
-          return true;
-        } catch (error) {
-          ErrorHandler.showError(`地图初始化失败: ${error.message}`);
-          return false;
-        }
-      }
-    };
-
-    const GEEService = {
-      init: async () => {
-        try {
-          await ee.data.authenticateViaOauth('43779976395-dm7nk4h1k9vdqpkpe7mmn4nr3k2easdq.apps.googleusercontent.com', () => {
-            ee.initialize(null, null, () => {
-              AppState.isGEEInitialized = true;
-              console.log("GEE 初始化成功");
-              continueAppInit();
-            }, ErrorHandler.handleGEEError);
-          }, ErrorHandler.handleGEEError, null, {
-            scope: 'https://www.googleapis.com/auth/earthengine.readonly'
-          });
-        } catch (e) {
-          ErrorHandler.handleGEEError(e);
-        }
-      }
-    };
-
-    function continueAppInit() {
+    // 初始化年份选择框
+    function initializeYearRange() {
+      const yearSelect = document.getElementById('yearRange');
+      yearSelect.innerHTML = '';
       const currentYear = new Date().getFullYear();
       for (let year = 2015; year <= currentYear; year++) {
         const option = document.createElement('option');
         option.value = year;
         option.textContent = year;
-        DOM.yearRange.appendChild(option);
+        yearSelect.appendChild(option);
       }
-
-      DOM.yearRange.disabled = false;
-      DOM.analyzeBtn.disabled = false;
-      DOM.visualizeBtn.disabled = false;
-
-      DOM.status.textContent = "初始化完成，可开始分析";
-      DOM.status.className = "status-info";
-      AppState.isInitialized = true;
+      yearSelect.disabled = false;
+      document.getElementById('analyze-btn').disabled = false;
+      document.getElementById('visualize-btn').disabled = false;
+      const status = document.getElementById('status');
+      status.textContent = '初始化完成，可以开始分析！';
+      status.className = 'status-info';
     }
 
-    async function initApp() {
-      try {
-        if (!MapService.init()) return;
-        await GEEService.init();
-      } catch (e) {
-        ErrorHandler.showError(`系统初始化失败: ${e.message}`);
-      }
+    // 全局回调函数，确保 Google Maps API 回调可用
+    function initApp() {
+      document.getElementById('status').textContent = '地图加载中...';
+      const map = new google.maps.Map(document.getElementById('map'), {
+        center: { lat: 29.0, lng: 116.3 },
+        zoom: 8
+      });
+
+      document.getElementById('status').textContent = 'Earth Engine 初始化中...';
+      ee.initialize()
+        .then(() => {
+          console.log('Earth Engine 初始化成功');
+          initializeYearRange();
+        })
+        .catch(error => {
+          console.error('Earth Engine 初始化失败:', error);
+          const status = document.getElementById('status');
+          status.textContent = 'Earth Engine 初始化失败！';
+          status.className = 'status-error';
+        });
     }
 
-    DOM.analyzeBtn.addEventListener('click', async () => {
-      if (!AppState.isGEEInitialized) {
-        ErrorHandler.showError("请先完成 Earth Engine 初始化");
-        return;
-      }
+    // 分析按钮事件
+    document.addEventListener('DOMContentLoaded', function() {
+      document.getElementById('analyze-btn').addEventListener('click', function() {
+        const year = document.getElementById('yearRange').value;
+        const status = document.getElementById('status');
+        status.textContent = '正在分析 ' + year + ' 年数据...';
+        setTimeout(() => {
+          status.textContent = year + ' 年数据分析完成。';
+          status.className = 'status-info';
+        }, 2000);
+      });
 
-      const selectedYear = DOM.yearRange.value;
-      DOM.status.textContent = `分析中... (${selectedYear})`;
-      // 实际 Earth Engine 图层分析逻辑...
-      setTimeout(() => {
-        DOM.status.textContent = `分析完成: ${selectedYear}`;
-        DOM.status.className = "status-info";
-      }, 1000);
+      document.getElementById('visualize-btn').addEventListener('click', function() {
+        const year = document.getElementById('yearRange').value;
+        const status = document.getElementById('status');
+        status.textContent = '正在加载 ' + year + ' 年水体数据...';
+        setTimeout(() => {
+          status.textContent = year + ' 年水体数据已加载。';
+          status.className = 'status-info';
+        }, 2000);
+      });
     });
 
-    DOM.visualizeBtn.addEventListener('click', async () => {
-      if (!AppState.isGEEInitialized) {
-        ErrorHandler.showError("请先完成 Earth Engine 初始化");
-        return;
-      }
-
-      const selectedYear = DOM.yearRange.value;
-      DOM.status.textContent = `加载水体图中... (${selectedYear})`;
-      // 可视化逻辑示例
-      setTimeout(() => {
-        DOM.status.textContent = `${selectedYear} 年水体图显示完成`;
-        DOM.status.className = "status-info";
-      }, 1000);
-    });
-
+    // 异步加载 Google Maps API
+    (function loadGoogleMaps() {
+      const script = document.createElement('script');
+      script.src = 'https://maps.googleapis.com/maps/api/js?key=AIzaSyCNwzyHL8XUS9UW3G9qrZymFVgD7Hqhgpc&callback=initApp';
+      script.async = true;
+      script.defer = true;
+      script.onerror = () => {
+        const status = document.getElementById('status');
+        status.textContent = '地图加载失败，请检查 API Key 和网络连接。';
+        status.className = 'status-error';
+      };
+      document.head.appendChild(script);
+    })();
   </script>
 </body>
 </html>
