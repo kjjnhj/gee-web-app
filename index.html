@@ -32,7 +32,6 @@
     </div>
   </div>
 
-  <!-- 加载 Google Maps 并显示 MapTile 图层 -->
   <script>
     function initializeYearRange() {
       const yearSelect = document.getElementById('yearRange');
@@ -54,41 +53,6 @@
 
     let map;
 
-// 1. 动态请求 MapID
-  fetch('/mapid?year=' + year)
-    .then(res => res.json())
-    .then(data => {
-      if (!data.urlFormat) {
-        status.textContent = '后端未返回有效的 urlFormat，请检查后端服务。';
-        status.className = 'status-error';
-        return;
-      }
-
-      // 2. 用 urlFormat 加载图层
-      map.overlayMapTypes.clear();
-      const geeOverlay = new google.maps.ImageMapType({
-        getTileUrl: function(coord, zoom) {
-          // urlFormat 是形如 https://earthengine.googleapis.com/map/xxx/{z}/{x}/{y}?token=xxx
-          return data.urlFormat
-            .replace('{x}', coord.x)
-            .replace('{y}', coord.y)
-            .replace('{z}', zoom);
-        },
-        tileSize: new google.maps.Size(256, 256),
-        name: year + '年水体图',
-        opacity: 0.6
-      });
-      map.overlayMapTypes.push(geeOverlay);
-      status.textContent = year + ' 年水体图层已加载。';
-      status.className = 'status-info';
-    })
-    .catch(() => {
-      status.textContent = '获取图层数据失败，请检查网络或后端服务。';
-      status.className = 'status-error';
-    });
-});
-
-
     function initApp() {
       const status = document.getElementById('status');
       status.textContent = '地图加载中...';
@@ -96,7 +60,6 @@
         center: { lat: 29.0, lng: 116.3 },
         zoom: 8
       });
-
       initializeYearRange();
     }
 
@@ -113,30 +76,38 @@
 
       document.getElementById('visualize-btn').addEventListener('click', function() {
         const year = document.getElementById('yearRange').value;
-        const layer = mapLayersByYear[year];
         const status = document.getElementById('status');
-
-        if (!layer) {
-          status.textContent = '未找到 ' + year + ' 年的图层信息，请联系管理员更新配置。';
-          status.className = 'status-error';
-          return;
-        }
-
-        const tileUrl = `https://earthengine.googleapis.com/map/${layer.mapid}/{z}/{x}/{y}` + (layer.token ? `?token=${layer.token}` : '');
-
-        map.overlayMapTypes.clear();
-        const geeOverlay = new google.maps.ImageMapType({
-          getTileUrl: function(coord, zoom) {
-            return tileUrl.replace('{x}', coord.x).replace('{y}', coord.y).replace('{z}', zoom);
-          },
-          tileSize: new google.maps.Size(256, 256),
-          name: year + '年水体图',
-          opacity: 0.6
-        });
-        map.overlayMapTypes.push(geeOverlay);
-
-        status.textContent = year + ' 年水体图层已加载。';
+        status.textContent = '正在获取 ' + year + ' 年图层数据...';
         status.className = 'status-info';
+
+        fetch('/mapid?year=' + year)
+          .then(res => res.json())
+          .then(data => {
+            if (!data.urlFormat) {
+              status.textContent = '后端未返回有效的 urlFormat，请检查后端服务。';
+              status.className = 'status-error';
+              return;
+            }
+            map.overlayMapTypes.clear();
+            const geeOverlay = new google.maps.ImageMapType({
+              getTileUrl: function(coord, zoom) {
+                return data.urlFormat
+                  .replace('{x}', coord.x)
+                  .replace('{y}', coord.y)
+                  .replace('{z}', zoom);
+              },
+              tileSize: new google.maps.Size(256, 256),
+              name: year + '年水体图',
+              opacity: 0.6
+            });
+            map.overlayMapTypes.push(geeOverlay);
+            status.textContent = year + ' 年水体图层已加载。';
+            status.className = 'status-info';
+          })
+          .catch(() => {
+            status.textContent = '获取图层数据失败，请检查网络或后端服务。';
+            status.className = 'status-error';
+          });
       });
     });
 
@@ -156,4 +127,3 @@
   </script>
 </body>
 </html>
-
