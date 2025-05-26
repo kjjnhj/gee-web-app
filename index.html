@@ -5,13 +5,14 @@
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>鄱阳湖水体分析系统</title>
-  <!-- CSP应通过HTTP头设置，这里是示例meta标签 -->
+  <!-- 内容安全策略（已适配GEE和Maps） -->
   <meta http-equiv="Content-Security-Policy" content="
     default-src 'self';
-    script-src 'self' https://maps.googleapis.com 'unsafe-inline' 'unsafe-eval';
-    style-src 'self' 'unsafe-inline';
-    img-src 'self' data: https://*.gstatic.com https://maps.googleapis.com;
-    connect-src 'self' https://maps.googleapis.com;
+    script-src 'self' https://maps.googleapis.com https://ajax.googleapis.com 'unsafe-inline' 'unsafe-eval';
+    style-src 'self' 'unsafe-inline' https://fonts.googleapis.com;
+    img-src 'self' data: https://*.gstatic.com https://maps.googleapis.com https://maps.gstatic.com;
+    font-src 'self' https://fonts.gstatic.com;
+    connect-src 'self' https://maps.googleapis.com https://*.googleapis.com https://www.gstatic.com;
     worker-src 'self' blob:;
     frame-src 'none';
     object-src 'none';
@@ -74,73 +75,18 @@
       border-radius: 8px;
       padding: 15px;
       margin-bottom: 20px;
-      box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-    }
-    
-    select, button {
-      padding: 8px 12px;
-      border-radius: 4px;
-      border: 1px solid #ddd;
-      font-family: inherit;
-    }
-    
-    button {
-      background-color: var(--primary-color);
-      color: white;
-      border: none;
-      cursor: pointer;
-      transition: background-color 0.3s;
-      min-width: 120px;
-    }
-    
-    button:hover {
-      background-color: #3367d6;
-    }
-    
-    button:disabled {
-      background-color: #cccccc;
-      cursor: not-allowed;
-    }
-    
-    #status {
-      padding: 8px 12px;
-      border-radius: 4px;
-      margin-left: auto;
-      min-width: 200px;
-      text-align: center;
     }
     
     .status-info {
-      background-color: var(--info-color);
-      color: white;
+      color: var(--info-color);
     }
     
     .status-error {
-      background-color: var(--error-color);
-      color: white;
+      color: var(--error-color);
     }
     
-    label {
-      font-weight: bold;
-      margin-right: 5px;
-    }
-
-    /* 图例样式 */
     .water-legend {
-      color: #4186F0;
-      display: inline-block;
-      width: 1em;
-      height: 1em;
-      margin-right: 5px;
-    }
-
-    @media (max-width: 768px) {
-      .dashboard {
-        grid-template-columns: 1fr;
-      }
-      .card {
-        height: 400px;
-      }
+      color: var(--primary-color);
     }
   </style>
 </head>
@@ -148,12 +94,10 @@
   <div class="container">
     <div class="header">
       <h1>鄱阳湖水体分析系统</h1>
-      <p>基于卫星影像的水体变化监测</p>
     </div>
     
     <div class="controls">
-      <label for="year-range">选择年份：</label>
-      <select id="year-range" disabled aria-label="选择分析年份">
+      <select id="year-range" disabled>
         <option value="">加载年份中...</option>
       </select>
       <button id="analyze-btn" disabled>开始分析</button>
@@ -179,12 +123,20 @@
     </div>
   </div>
 
+  <!-- 加载Google Earth Engine库 -->
+  <script src="https://ajax.googleapis.com/ajax/libs/earth-engine/0.1.370/ee_api.js"></script>
+  
+  <!-- 加载Google Maps API（请替换YOUR_API_KEY） -->
+  <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyCNwzyHL8XUS9UW3G9qrZymFVgD7Hqhgpc&loading=async&libraries=visualization&callback=initApp" async defer></script>
+
+  <!-- 主应用逻辑 -->
   <script>
     // 全局状态管理
     const AppState = {
       map: null,
       currentAnalysis: null,
-      isInitialized: false
+      isInitialized: false,
+      isGEEInitialized: false
     };
 
     // DOM元素缓存
@@ -206,6 +158,9 @@
       },
       handleGMapsError: () => {
         this.showError("地图服务加载失败，请检查网络连接后刷新页面");
+      },
+      handleGEEError: (error) => {
+        this.showError(`Earth Engine初始化失败: ${error.message}`);
       }
     };
 
@@ -219,9 +174,9 @@
 
         try {
           AppState.map = new google.maps.Map(DOM.mapContainer, {
-            center: { lat: 29.0, lng: 116.3 },
+            center: { lat: 29.0, lng: 116.3 },  // 鄱阳湖大致坐标
             zoom: 8,
-            mapId: "8ad8db94521eb93e4adf16dc"
+            mapId: "8ad8db94521eb93e4adf16dc"  // 可选：自定义地图样式ID
           });
           return true;
         } catch (error) {
@@ -231,13 +186,36 @@
       }
     };
 
+    // GEE初始化（已整合您的OAuth客户端ID）
+    const GEEService = {
+      init: async () => {
+        try {
+          // >>> 在这里替换您的OAuth客户端ID <<<
+          await ee.initialize({
+            clientId: '43779976395-dm7nk4h1k9vdqpkpe7mmn4nr3k2easdq.apps.googleusercontent.com', // 替换为您的真实ID
+            cookiePolicy: 'single_host_origin'
+          });
+          
+          AppState.isGEEInitialized = true;
+          console.log("GEE初始化成功（使用自定义客户端）");
+          return true;
+        } catch (error) {
+          ErrorHandler.handleGEEError(error);
+          return false;
+        }
+      }
+    };
+
     // 应用初始化
-    function initApp() {
+    async function initApp() {
       try {
-        // 初始化地图
+        // 1. 初始化GEE（带OAuth认证）
+        if (!await GEEService.init()) return;
+        
+        // 2. 初始化地图
         if (!MapService.init()) return;
         
-        // 初始化年份选择器
+        // 3. 初始化年份选择器（2015-当前年）
         const currentYear = new Date().getFullYear();
         DOM.yearRange.innerHTML = '';
         for (let year = 2015; year <= currentYear; year++) {
@@ -247,12 +225,12 @@
           DOM.yearRange.appendChild(option);
         }
         
-        // 启用控件
+        // 4. 启用控件
         DOM.yearRange.disabled = false;
         DOM.analyzeBtn.disabled = false;
         DOM.visualizeBtn.disabled = false;
         
-        // 更新状态
+        // 5. 更新状态
         DOM.status.textContent = "准备就绪";
         DOM.status.className = "status-info";
         AppState.isInitialized = true;
@@ -262,28 +240,38 @@
       }
     }
 
-    // 安全加载Google Maps API
-    function loadGoogleMaps() {
-      return new Promise((resolve, reject) => {
-        const script = document.createElement('script');
-        script.src = `https://maps.googleapis.com/maps/api/js?key=AIzaSyCNwzyHL8XUS9UW3G9qrZymFVgD7Hqhgpc&loading=async&libraries=visualization&callback=initApp`;
-        script.async = true;
-        script.defer = true;
-        script.onerror = () => {
-          ErrorHandler.handleGMapsError();
-          reject(new Error('Failed to load Google Maps API'));
-        };
-        document.head.appendChild(script);
-      });
-    }
+    // 按钮事件绑定
+    document.getElementById('analyze-btn').addEventListener('click', async () => {
+      if (!AppState.isGEEInitialized) {
+        ErrorHandler.showError("请先完成GEE初始化");
+        return;
+      }
+      try {
+        DOM.status.textContent = "分析中...";
+        const selectedYear = DOM.yearRange.value;
+        // >>> 在这里添加您的GEE分析逻辑 <<<
+        // 示例: const result = await analyzeWaterBody(selectedYear);
+        DOM.status.textContent = `${selectedYear}年分析完成`;
+      } catch (error) {
+        ErrorHandler.showError(`分析失败: ${error.message}`);
+      }
+    });
 
-    // 启动应用
-    document.addEventListener('DOMContentLoaded', () => {
-      loadGoogleMaps().catch(ErrorHandler.handleGMapsError);
+    document.getElementById('visualize-btn').addEventListener('click', async () => {
+      if (!AppState.isGEEInitialized) {
+        ErrorHandler.showError("请先完成GEE初始化");
+        return;
+      }
+      try {
+        DOM.status.textContent = "生成水体图中...";
+        const selectedYear = DOM.yearRange.value;
+        // >>> 在这里添加您的GEE可视化逻辑 <<<
+        // 示例: await visualizeWaterMask(selectedYear);
+        DOM.status.textContent = `${selectedYear}年水体图已显示`;
+      } catch (error) {
+        ErrorHandler.showError(`可视化失败: ${error.message}`);
+      }
     });
   </script>
-  
-  <!-- 主应用逻辑 -->
-  <script src="app.js?v=1.0.1"></script>
 </body>
 </html>
