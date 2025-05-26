@@ -149,20 +149,27 @@
       chartCanvas: document.getElementById('water-chart')
     };
 
-    // 错误处理系统
-    const ErrorHandler = {
-      showError: (message) => {
-        DOM.status.textContent = message;
-        DOM.status.className = "status-error";
-        console.error(message);
-      },
-      handleGMapsError: () => {
-        this.showError("地图服务加载失败，请检查网络连接后刷新页面");
-      },
-      handleGEEError: (error) => {
-        this.showError(`Earth Engine初始化失败: ${error.message}`);
-      }
-    };
+// 修正后的错误处理系统（推荐使用箭头函数保持this绑定）
+const ErrorHandler = {
+  showError: (message) => {
+    const statusEl = document.getElementById('status');
+    if (statusEl) {
+      statusEl.textContent = message;
+      statusEl.className = "status-error";
+    }
+    console.error(message);
+  },
+  handleGMapsError: () => {
+    ErrorHandler.showError("地图服务加载失败，请检查：\n1. 网络连接\n2. API密钥有效性\n3. 控制台错误详情");
+  },
+  handleGEEError: (error) => {
+    let errorMsg = `Earth Engine初始化失败: ${error.message}`;
+    if (error.message.includes("authenticate")) {
+      errorMsg += "\n请确保已登录Google账号并授权Earth Engine访问权限";
+    }
+    ErrorHandler.showError(errorMsg);
+  }
+};
 
     // 地图服务初始化
     const MapService = {
