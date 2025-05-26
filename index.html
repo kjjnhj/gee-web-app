@@ -54,37 +54,39 @@
 
     let map;
 
-    // 可根据年份匹配 mapId 和 token 的映射对象（替换为你实际的 mapId 和 token）
-  const mapLayersByYear = {
-    2016: {
-      mapid: "projects/ee-lkls031201/maps/2cf1a3f2c2be59fa4276ab4c672da6c9-7fd4aa65e2f3fb21963da19b5b0acd68",
-      token: ""
-    },
-    2017: {
-      mapid: "projects/ee-lkls031201/maps/3b02f373a01877c2037899dae82e599a-d4bd2a9e10c22653c6b994b779e07a8f",
-      token: ""
-    },
-    2018: {
-      mapid: "projects/ee-lkls031201/maps/efa5a0e7cee4d4d3a1f8b7572e9cee40-cfd134e5ebbcc6d2daa2cd4d4c2872ff",
-      token: ""
-    },
-    2019: {
-      mapid: "projects/ee-lkls031201/maps/5c216ea052aca02b42264e0e8af55871-ea1b3f015710045aff2c523072c29597",
-      token: ""
-    },
-    2020: {
-      mapid: "projects/ee-lkls031201/maps/a5ebf35a43beba2946f68ef1827e0ff5-b224af8515bd3d2a84975412914dc22e",
-      token: ""
-    },
-    2021: {
-      mapid: "projects/ee-lkls031201/maps/4d4db515e356bf7d1b1a9c96ca592ba9-fa25614489fde4f46c359bbc0ef28d6b",
-      token: ""
-    },
-    2022: {
-      mapid: "projects/ee-lkls031201/maps/662e95ede4d64cd68c9ba6ad741bb4e9-6f290807bd528b29ee2006aeeb922491",
-      token: ""
-    }
-  };
+// 1. 动态请求 MapID
+  fetch('/mapid?year=' + year)
+    .then(res => res.json())
+    .then(data => {
+      if (!data.urlFormat) {
+        status.textContent = '后端未返回有效的 urlFormat，请检查后端服务。';
+        status.className = 'status-error';
+        return;
+      }
+
+      // 2. 用 urlFormat 加载图层
+      map.overlayMapTypes.clear();
+      const geeOverlay = new google.maps.ImageMapType({
+        getTileUrl: function(coord, zoom) {
+          // urlFormat 是形如 https://earthengine.googleapis.com/map/xxx/{z}/{x}/{y}?token=xxx
+          return data.urlFormat
+            .replace('{x}', coord.x)
+            .replace('{y}', coord.y)
+            .replace('{z}', zoom);
+        },
+        tileSize: new google.maps.Size(256, 256),
+        name: year + '年水体图',
+        opacity: 0.6
+      });
+      map.overlayMapTypes.push(geeOverlay);
+      status.textContent = year + ' 年水体图层已加载。';
+      status.className = 'status-info';
+    })
+    .catch(() => {
+      status.textContent = '获取图层数据失败，请检查网络或后端服务。';
+      status.className = 'status-error';
+    });
+});
 
 
     function initApp() {
