@@ -53,7 +53,23 @@
     }
 
     let map;
-    let geeOverlay;
+
+    // 可根据年份匹配 mapId 和 token 的映射对象（替换为你实际的 mapId 和 token）
+    const mapLayersByYear = {
+      '2020': {
+        mapid: 'projects/ee-lkls031201/maps/a5ebf35a43beba2946f68ef1827e0ff5-b224af8515bd3d2a84975412914dc22e',
+        token: 'your_token_2020'
+      },
+      '2021': {
+        mapid: 'projects/ee-lkls031201/maps/4d4db515e356bf7d1b1a9c96ca592ba9-fa25614489fde4f46c359bbc0ef28d6b',
+        token: 'your_token_2021'
+      },
+      '2022': {
+        mapid: 'projects/ee-lkls031201/maps/662e95ede4d64cd68c9ba6ad741bb4e9-6f290807bd528b29ee2006aeeb922491',
+        token: 'your_token_2022'
+      }
+      // 可继续添加更多年份
+    };
 
     function initApp() {
       const status = document.getElementById('status');
@@ -79,16 +95,19 @@
 
       document.getElementById('visualize-btn').addEventListener('click', function() {
         const year = document.getElementById('yearRange').value;
+        const layer = mapLayersByYear[year];
         const status = document.getElementById('status');
-        status.textContent = '正在加载 ' + year + ' 年水体图层...';
 
-        // 示例：使用静态 GEE TileLayer URL
-        const mapId = 'your_map_id';
-        const token = 'your_token';
-        const tileUrl = `https://earthengine.googleapis.com/map/${mapId}/{z}/{x}/{y}?token=${token}`;
+        if (!layer) {
+          status.textContent = '未找到 ' + year + ' 年的图层信息，请联系管理员更新配置。';
+          status.className = 'status-error';
+          return;
+        }
 
-        if (geeOverlay) geeOverlay.setMap(null);
-        geeOverlay = new google.maps.ImageMapType({
+        const tileUrl = `https://earthengine.googleapis.com/map/${layer.mapid}/{z}/{x}/{y}?token=${layer.token}`;
+
+        map.overlayMapTypes.clear();
+        const geeOverlay = new google.maps.ImageMapType({
           getTileUrl: function(coord, zoom) {
             return tileUrl.replace('{x}', coord.x).replace('{y}', coord.y).replace('{z}', zoom);
           },
@@ -96,13 +115,10 @@
           name: year + '年水体图',
           opacity: 0.6
         });
-        map.overlayMapTypes.clear();
         map.overlayMapTypes.push(geeOverlay);
 
-        setTimeout(() => {
-          status.textContent = year + ' 年水体图层已加载。';
-          status.className = 'status-info';
-        }, 1000);
+        status.textContent = year + ' 年水体图层已加载。';
+        status.className = 'status-info';
       });
     });
 
@@ -122,5 +138,4 @@
   </script>
 </body>
 </html>
-
 
