@@ -32,8 +32,10 @@
     </div>
   </div>
 
-  <!-- Earth Engine -->
-  <script src="https://apis.google.com/js/api.js"></script>
+  <!-- 加载 Google Maps 脚本 -->
+  <script async defer src="https://maps.googleapis.com/maps/api/js?key=AIzaSyCNwzyHL8XUS9UW3G9qrZymFVgD7Hqhgpc&callback=initApp"></script>
+
+  <!-- 加载 Earth Engine 脚本 -->
   <script src="https://earthengine.googleapis.com/earthengine.js"></script>
 
   <script>
@@ -87,7 +89,7 @@
     const GEEService = {
       init: async () => {
         try {
-          await ee.data.authenticateViaOauth(43779976395-dm7nk4h1k9vdqpkpe7mmn4nr3k2easdq.apps.googleusercontent.com, () => {
+          await ee.data.authenticateViaOauth('43779976395-dm7nk4h1k9vdqpkpe7mmn4nr3k2easdq.apps.googleusercontent.com', () => {
             ee.initialize(null, null, () => {
               AppState.isGEEInitialized = true;
               console.log("GEE 初始化成功");
@@ -159,17 +161,6 @@
       }, 1000);
     });
 
-    // 加载 Google Maps 脚本后启动应用
-    function loadMapsAndInit() {
-      const script = document.createElement('script');
-      script.src = `https://maps.googleapis.com/maps/api/js?key=AIzaSyCNwzyHL8XUS9UW3G9qrZymFVgD7Hqhgpc&callback=initApp`;
-      script.async = true;
-      script.onerror = ErrorHandler.handleGMapsError;
-      document.head.appendChild(script);
-    }
-
-    window.initApp = initApp;
-    loadMapsAndInit();
   </script>
 </body>
 </html>
