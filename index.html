@@ -80,7 +80,7 @@
         status.textContent = '正在获取 ' + year + ' 年图层数据...';
         status.className = 'status-info';
 
-        fetch('/mapid?year=' + year)
+        fetch('http://localhost:3000/mapid?year=' + year)
           .then(res => res.json())
           .then(data => {
             if (!data.urlFormat) {
